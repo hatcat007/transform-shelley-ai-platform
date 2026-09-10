@@ -430,7 +430,13 @@ async function handleOpenInNewTab(e: MouseEvent) {
   const blob = new Blob([wrapperHtml], { type: "text/html" });
   const url = URL.createObjectURL(blob);
   win.location.href = url;
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const revoke = () => URL.revokeObjectURL(url);
+  try {
+    win.addEventListener("load", () => setTimeout(revoke, 1000), { once: true });
+  } catch {
+    // ignore; fallback timeout below still cleans up
+  }
+  setTimeout(revoke, 60000);
 }
 
 // Download files - single HTML or zip with all files

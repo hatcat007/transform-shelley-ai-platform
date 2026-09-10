@@ -40,18 +40,17 @@ export function parseSnapshot(value: unknown) {
     output += u.output_tokens || 0;
     cached += u.cache_read_input_tokens || 0;
   };
-  try {
-    for (const message of snapshot.messages || []) {
-      if (message.message_id) {
-        if (seen.has(message.message_id)) continue;
-        seen.add(message.message_id);
-      }
+  for (const message of snapshot.messages || []) {
+    if (message.message_id) {
+      if (seen.has(message.message_id)) continue;
+      seen.add(message.message_id);
+    }
+    try {
       if (!message.forked_from_message_id) {
         if (message.usage_data) addUsage(JSON.parse(message.usage_data));
         if (message.other_usage_data) {
           const indirect = JSON.parse(message.other_usage_data);
-          if (!Array.isArray(indirect))
-            throw new Error("Expected indirect usage array.");
+          if (!Array.isArray(indirect)) continue;
           for (const item of indirect) addUsage(item);
         }
       }
@@ -71,11 +70,9 @@ export function parseSnapshot(value: unknown) {
         for (const block of content.Content || [])
           if (block.Type === "text" && block.Text) texts.push(block.Text);
       }
+    } catch {
+      continue;
     }
-  } catch {
-    throw new Error(
-      "Shelley returned malformed message or usage data; no usage totals were saved.",
-    );
   }
   return {
     output: texts.join("\n\n") || null,

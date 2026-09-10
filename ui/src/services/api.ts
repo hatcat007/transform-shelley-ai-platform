@@ -959,6 +959,7 @@ export interface CustomModel {
   provider_type: "anthropic" | "openai" | "openai-responses" | "gemini";
   endpoint: string;
   api_key: string;
+  has_api_key: boolean;
   model_name: string;
   max_tokens: number;
   tags: string; // Comma-separated tags (e.g., "slug" for slug generation)

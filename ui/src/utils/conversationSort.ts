@@ -10,7 +10,7 @@ export const BUCKET_MS = 5 * 60 * 1000;
 export function updatedBucket(updatedAt: string): number {
   const t = new Date(updatedAt).getTime();
   if (!Number.isFinite(t)) {
-    throw new Error(`invalid updated_at: ${updatedAt}`);
+    return Number.NEGATIVE_INFINITY;
   }
   return Math.floor(t / BUCKET_MS);
 }

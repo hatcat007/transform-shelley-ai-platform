@@ -19,9 +19,16 @@ export async function getWorkspace() {
 export function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const site = request.headers.get("sec-fetch-site");
-  if (
-    site === "cross-site" ||
-    (origin && new URL(origin).host !== request.headers.get("host"))
-  )
+  if (site === "cross-site")
     throw new Error("Cross-origin writes are not permitted.");
+  if (origin) {
+    let host: string;
+    try {
+      host = new URL(origin).host;
+    } catch {
+      throw new Error("Cross-origin writes are not permitted.");
+    }
+    if (host !== request.headers.get("host"))
+      throw new Error("Cross-origin writes are not permitted.");
+  }
 }
