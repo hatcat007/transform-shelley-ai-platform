@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -24,6 +26,7 @@ type ModelAPI struct {
 	ProviderType    string `json:"provider_type"`
 	Endpoint        string `json:"endpoint"`
 	APIKey          string `json:"api_key"`
+	HasAPIKey       bool   `json:"has_api_key"`
 	ModelName       string `json:"model_name"`
 	MaxTokens       int64  `json:"max_tokens"`
 	Tags            string `json:"tags"` // Comma-separated tags (e.g., "slug" for slug generation)
@@ -133,7 +136,8 @@ func toModelAPI(m generated.Model) ModelAPI {
 		DisplayName:       m.DisplayName,
 		ProviderType:      m.ProviderType,
 		Endpoint:          m.Endpoint,
-		APIKey:            m.ApiKey,
+		APIKey:            "",
+		HasAPIKey:         m.ApiKey != "",
 		ModelName:         m.ModelName,
 		MaxTokens:         m.MaxTokens,
 		Tags:              m.Tags,
@@ -467,6 +471,10 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 		return
 	}
+	if err := validateTestEndpoint(r.Context(), req.Endpoint); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 
 	// A model ID supplies hidden legacy configuration and, when omitted by the
 	// caller, its stored API key. The UI intentionally does not expose the
@@ -623,4 +631,36 @@ func (s *Server) handleTestModel(w http.ResponseWriter, r *http.Request) {
 		"success": true,
 		"message": fmt.Sprintf("Test successful! Response: %s", responseText),
 	})
+}
+
+func validateTestEndpoint(ctx context.Context, endpoint string) error {
+	u, err := url.Parse(endpoint)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
+		return errors.New("endpoint must be an http(s) URL without credentials")
+	}
+	// Fail closed on cloud metadata and non-unicast hosts. Loopback and
+	// LAN addresses stay allowed: local LLM servers (e.g. ollama on
+	// localhost) are a core custom-model use case.
+	host := u.Hostname()
+	if ip := net.ParseIP(host); ip != nil {
+		if ip.IsUnspecified() || ip.IsMulticast() || isMetadataIP(ip) {
+			return errors.New("endpoint host not allowed")
+		}
+		return nil
+	}
+	addrs, err := net.DefaultResolver.LookupIP(ctx, "ip", host)
+	if err != nil || len(addrs) == 0 {
+		return errors.New("endpoint host could not be resolved")
+	}
+	for _, ip := range addrs {
+		if ip.IsUnspecified() || ip.IsMulticast() || isMetadataIP(ip) {
+			return errors.New("endpoint host not allowed")
+		}
+	}
+	return nil
+}
+
+func isMetadataIP(ip net.IP) bool {
+	// Cloud instance-metadata endpoint (IPv4 + IPv6).
+	return ip.Equal(net.ParseIP("169.254.169.254")) || ip.Equal(net.ParseIP("fd00:ec2::254"))
 }

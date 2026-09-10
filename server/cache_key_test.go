@@ -33,6 +33,7 @@ func doCacheKey(t *testing.T, svr *Server, header, userID string, cookies ...*ht
 	req := httptest.NewRequest(http.MethodGet, "/api/cache-key", nil)
 	// httptest requests aren't TLS; pretend we're behind an HTTPS proxy
 	// so the cookie gets the Secure attribute.
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	if header != "" && userID != "" {
 		req.Header.Set(header, userID)

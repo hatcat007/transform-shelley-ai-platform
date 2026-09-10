@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"shelley.exe.dev/db"
@@ -421,8 +422,10 @@ func TestHandleWriteFile(t *testing.T) {
 	t.Parallel()
 	h := NewTestHarness(t)
 
-	// Test successful POST request
-	filePath := "/tmp/test-file.txt"
+	// Test successful POST request (inside a git repo, per the jail)
+	dir := t.TempDir()
+	mustGitInit(t, dir)
+	filePath := filepath.Join(dir, "test-file.txt")
 	fileContent := "test content"
 	body := fmt.Sprintf(`{"path": "%s", "content": "%s"}`, filePath, fileContent)
 	req := httptest.NewRequest(http.MethodPost, "/api/write-file", bytes.NewBufferString(body))

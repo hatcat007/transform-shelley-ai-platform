@@ -75,6 +75,7 @@ export async function POST(request: Request, context: Context) {
         { status: 400 },
       );
     const action = parsed.data;
+    const workspace = await getWorkspace();
     if (action.action === "cancel") {
       if (session.status !== "running") return Response.json(session);
       if (session.remoteId)
@@ -85,7 +86,12 @@ export async function POST(request: Request, context: Context) {
       const [updated] = await db
         .update(stationSessions)
         .set({ status: "cancelled" })
-        .where(eq(stationSessions.id, id))
+        .where(
+          and(
+            eq(stationSessions.id, id),
+            eq(stationSessions.workspace, workspace),
+          ),
+        )
         .returning();
       return Response.json(updated);
     }
@@ -119,6 +125,7 @@ export async function POST(request: Request, context: Context) {
       .where(
         and(
           eq(stationSessions.id, id),
+          eq(stationSessions.workspace, workspace),
           eq(stationSessions.status, session.status),
         ),
       )
@@ -136,14 +143,24 @@ export async function POST(request: Request, context: Context) {
       const [updated] = await db
         .update(stationSessions)
         .set({ input: session.input + "\n\nFollow-up:\n" + action.message })
-        .where(eq(stationSessions.id, id))
+        .where(
+          and(
+            eq(stationSessions.id, id),
+            eq(stationSessions.workspace, workspace),
+          ),
+        )
         .returning();
       return Response.json(updated);
     } catch (error) {
       await db
         .update(stationSessions)
         .set({ status: "failed" })
-        .where(eq(stationSessions.id, id));
+        .where(
+          and(
+            eq(stationSessions.id, id),
+            eq(stationSessions.workspace, workspace),
+          ),
+        );
       throw error;
     }
   } catch (error) {

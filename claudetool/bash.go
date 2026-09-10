@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,6 +24,8 @@ import (
 
 // PermissionCallback is a function type for checking if a command is allowed to run
 type PermissionCallback func(command string) error
+
+var validPackageName = regexp.MustCompile(`^[a-z0-9][a-z0-9+._-]*$`)
 
 // BashTool specifies an llm.Tool for executing shell commands.
 type BashTool struct {
@@ -628,6 +631,9 @@ Command: %s
 
 // installPackage handles the actual package installation
 func (b *BashTool) installPackage(ctx context.Context, cmd, packageName, packageManager string) error {
+	if !validPackageName.MatchString(packageName) {
+		return fmt.Errorf("invalid package name: %q", packageName)
+	}
 	// Install the package (with update command first if needed)
 	// TODO: these invocations create zombies when we are PID 1.
 	// We should give them the same zombie-reaping treatment as above,

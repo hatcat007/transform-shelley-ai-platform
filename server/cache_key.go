@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 
 	"golang.org/x/crypto/hkdf"
@@ -154,10 +155,16 @@ func requestIsSecure(r *http.Request) bool {
 	if r.TLS != nil {
 		return true
 	}
-	if p := r.Header.Get("X-Forwarded-Proto"); p == "https" {
-		return true
+	// Only trust X-Forwarded-Proto from a local reverse proxy; otherwise an
+	// attacker can spoof it and control the Secure cookie attribute.
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
 	}
-	return false
+	if host != "127.0.0.1" && host != "::1" {
+		return false
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 // setCacheCookie attaches a fresh cookie to the response.

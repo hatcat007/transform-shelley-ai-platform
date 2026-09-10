@@ -155,11 +155,18 @@ onMounted(() => {
       } else if (msg.type === "attached" && msg.term_id) {
         emit("attached", props.term.id, msg.term_id);
       } else if (msg.type === "exit") {
-        const code = parseInt(msg.data, 10) || 0;
-        const color = code === 0 ? "32" : "31";
-        xterm.write(
-          `\r\n\x1b[2;${color}m${props.term.command} completed with exit code ${code}\x1b[0m\r\n`,
-        );
+        const parsed = parseInt(msg.data, 10);
+        const code = Number.isFinite(parsed) ? parsed : null;
+        if (code === null) {
+          xterm.write(
+            `\r\n\x1b[2;33m${props.term.command} completed (exit code unknown)\x1b[0m\r\n`,
+          );
+        } else {
+          const color = code === 0 ? "32" : "31";
+          xterm.write(
+            `\r\n\x1b[2;${color}m${props.term.command} completed with exit code ${code}\x1b[0m\r\n`,
+          );
+        }
         settled = true;
         emit("status-change", props.term.id, "exited", code);
       } else if (msg.type === "error") {

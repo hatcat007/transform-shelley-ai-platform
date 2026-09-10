@@ -20,8 +20,8 @@ ARCHES = ["amd64", "arm64"]
 REGISTRY_API = "https://registry.hub.docker.com/v2/repositories/chromedp/headless-shell/tags"
 
 
-def resolve_stable_version() -> str:
-    """Resolve :stable to a version by matching Docker Hub digests."""
+def _resolve_stable() -> tuple[str, str]:
+    """Resolve :stable to a (version, digest) pair by matching Docker Hub digests."""
     url = f"{REGISTRY_API}?page_size=100&ordering=last_updated"
     with urllib.request.urlopen(url, timeout=30) as resp:
         data = json.load(resp)
@@ -39,10 +39,22 @@ def resolve_stable_version() -> str:
     for tag in data["results"]:
         name = tag["name"]
         if name[:1].isdigit() and tag["digest"] == stable_digest:
-            return name
+            return name, stable_digest
 
     print("ERROR: no version tag matches stable digest", file=sys.stderr)
     sys.exit(1)
+
+
+def resolve_stable_version() -> str:
+    """Resolve :stable to a version by matching Docker Hub digests."""
+    version, _ = _resolve_stable()
+    return version
+
+
+def resolve_stable_digest() -> str:
+    """Resolve :stable to its registry digest."""
+    _, digest = _resolve_stable()
+    return digest
 
 
 def docker(*args: str, capture: bool = False, quiet: bool = False) -> str:
@@ -54,12 +66,12 @@ def docker(*args: str, capture: bool = False, quiet: bool = False) -> str:
     return result.stdout.strip() if capture else ""
 
 
-def extract_arch(arch: str, output_dir: Path) -> None:
+def extract_arch(arch: str, output_dir: Path, image_ref: str) -> None:
     """Extract headless-shell for a single architecture into a tarball."""
     print(f"Extracting headless-shell for {arch}...")
 
     with tempfile.TemporaryDirectory() as tmpdir:
-        cid = docker("create", "--platform", f"linux/{arch}", IMAGE, "/bin/true", capture=True)
+        cid = docker("create", "--platform", f"linux/{arch}", image_ref, "/bin/true", capture=True)
         try:
             docker("cp", f"{cid}:/headless-shell/.", f"{tmpdir}/headless-shell/")
         finally:
@@ -89,19 +101,21 @@ def main() -> None:
 
     # Resolve version from registry
     print(f"Resolving {IMAGE} version...")
-    version = resolve_stable_version()
+    version, digest = _resolve_stable()
     chromium_version = f"Chromium {version}"
     print(f"  {chromium_version}")
     (output_dir / "headless-shell-version.txt").write_text(chromium_version + "\n")
 
+    # Pull by digest so the mutable :stable tag cannot change under us
+    image_ref = f"chromedp/headless-shell@{digest}"
     # Pull for all platforms
     for arch in ARCHES:
-        print(f"Pulling {IMAGE} for linux/{arch}...")
-        docker("pull", "--platform", f"linux/{arch}", IMAGE, quiet=True)
+        print(f"Pulling {image_ref} for linux/{arch}...")
+        docker("pull", "--platform", f"linux/{arch}", image_ref, quiet=True)
 
     # Extract
     for arch in ARCHES:
-        extract_arch(arch, output_dir)
+        extract_arch(arch, output_dir, image_ref)
 
     print(f"Done. Version: {chromium_version}")
 

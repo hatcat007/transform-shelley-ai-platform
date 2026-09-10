@@ -101,7 +101,7 @@
         <label>{{ t("apiKey") }}</label>
         <InputText
           v-model="form.api_key"
-          :placeholder="t('enterApiKey')"
+          :placeholder="editModel?.has_api_key ? t('enterApiKey') + ' (stored, blank keeps existing)' : t('enterApiKey')"
           fluid
           :dt="inputFieldDt"
           autocomplete="off"
@@ -261,7 +261,7 @@
         <Button
           type="button"
           :label="editModel ? t('save') : t('addModel')"
-          :disabled="!form.display_name || !form.api_key || !form.model_name"
+          :disabled="!form.display_name || (!form.api_key && !editModel) || !form.model_name"
           @click="handleSave"
         />
       </div>
@@ -371,7 +371,7 @@ watch(
         provider_type: m.provider_type,
         endpoint: m.endpoint,
         endpoint_custom: m.endpoint !== DEFAULT_ENDPOINTS[m.provider_type as ProviderType],
-        api_key: m.api_key,
+        api_key: "",
         model_name: m.model_name,
         max_tokens: m.max_tokens,
         tags: m.tags,
@@ -438,7 +438,7 @@ async function handleTest() {
 }
 
 async function handleSave() {
-  if (!form.display_name || !form.api_key || !form.model_name) {
+  if (!form.display_name || (!form.api_key && !props.editModel) || !form.model_name) {
     error.value = "Display name, API key, and model name are required";
     return;
   }

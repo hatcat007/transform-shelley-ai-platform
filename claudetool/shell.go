@@ -257,8 +257,10 @@ func (s *ShellTool) run(ctx context.Context, req shellInput) llm.ToolOut {
 
 	// Rename to a pid-based path. The fd inside the child is unaffected.
 	pidPath := filepath.Join(filepath.Dir(logPath), fmt.Sprintf("shelley-shell-%d.log", pid))
-	if err := os.Rename(logPath, pidPath); err == nil {
-		logPath = pidPath
+	if _, err := os.Stat(pidPath); os.IsNotExist(err) {
+		if err := os.Rename(logPath, pidPath); err == nil {
+			logPath = pidPath
+		}
 	}
 
 	// The child has its own dup of the fd; we no longer need ours.

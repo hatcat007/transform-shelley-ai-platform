@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"shelley.exe.dev/llm"
 )
@@ -88,17 +89,17 @@ func (s *Server) handleMessageFile(w http.ResponseWriter, r *http.Request) {
 	// Check the type before opening: opening a FIFO blocks until a writer
 	// appears, which would hang this request goroutine, and a path can now name
 	// anything on the machine. Nothing we want to serve is a non-regular file.
-	if fi, err := os.Stat(resolved); err != nil || !fi.Mode().IsRegular() {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	f, err := os.Open(resolved)
+	// Open non-blocking first so a FIFO can't hang us, then require regular.
+	f, err := os.OpenFile(resolved, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	defer f.Close()
+	if fi, err := f.Stat(); err != nil || !fi.Mode().IsRegular() {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
 
 	// Sniff the content and require an image.
 	head := make([]byte, sniffLen)

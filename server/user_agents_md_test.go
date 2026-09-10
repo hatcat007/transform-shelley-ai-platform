@@ -104,7 +104,9 @@ func TestHandleWriteFileAutoCommits(t *testing.T) {
 	}
 
 	// Writes to other paths must not produce commits in our gitdir.
+	// (tmp is its own git repo so the write-file jail lets it through.)
 	other := filepath.Join(tmp, "other.txt")
+	mustGitInit(t, tmp)
 	write(other, "x")
 	if got := gitLogCount(t, gitDir); got != afterSecond {
 		t.Fatalf("unrelated write produced commit; got %d", got)

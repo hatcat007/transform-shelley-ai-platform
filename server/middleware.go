@@ -30,8 +30,7 @@ func LoggerMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 func RequireHeaderMiddleware(headerName string) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Only check API routes
-			if strings.HasPrefix(r.URL.Path, "/api/") {
+			if requiresProxyHeader(r.URL.Path) {
 				if r.Header.Get(headerName) == "" {
 					http.Error(w, "missing required header: "+headerName, http.StatusForbidden)
 					return
@@ -40,6 +39,18 @@ func RequireHeaderMiddleware(headerName string) func(http.Handler) http.Handler 
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+func requiresProxyHeader(path string) bool {
+	if strings.HasPrefix(path, "/api/") {
+		return true
+	}
+	for _, p := range []string{"/settings", "/feature-flags", "/upgrade", "/exit", "/debug/"} {
+		if path == p || strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // compressedResponseWriter compresses non-streaming HTTP responses.

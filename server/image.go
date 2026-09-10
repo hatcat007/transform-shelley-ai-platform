@@ -90,7 +90,13 @@ func (s *Server) handleMessageImage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve with aggressive caching — message images are immutable
-	w.Header().Set("Content-Type", imageContent.MediaType)
+	switch imageContent.MediaType {
+	case "image/png", "image/jpeg", "image/gif", "image/webp":
+		w.Header().Set("Content-Type", imageContent.MediaType)
+	default:
+		http.Error(w, "unsupported media type", http.StatusNotFound)
+		return
+	}
 	w.Header().Set("Cache-Control", "public, max-age=1209600")
 	w.Header().Set("Content-Length", strconv.Itoa(len(imageBytes)))
 	w.Write(imageBytes)

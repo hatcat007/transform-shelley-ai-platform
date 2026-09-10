@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"sort"
 	"strings"
@@ -41,6 +42,15 @@ type headerEntry struct {
 	AddedByExe bool
 }
 
+var validUserID = regexp.MustCompile(`^[A-Za-z0-9\-_.@]+$`)
+
+func isValidUserID(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	return validUserID.MatchString(s)
+}
+
 func New(dbPath, hostname string) (*Server, error) {
 	_, thisFile, _, _ := runtime.Caller(0)
 	baseDir := filepath.Dir(thisFile)
@@ -59,6 +69,9 @@ func (s *Server) HandleRoot(w http.ResponseWriter, r *http.Request) {
 	// Identity from proxy headers (if present)
 	// UserID is stable; email is useful.
 	userID := strings.TrimSpace(r.Header.Get("X-ExeDev-UserID"))
+	if !isValidUserID(userID) {
+		userID = ""
+	}
 	userEmail := strings.TrimSpace(r.Header.Get("X-ExeDev-Email"))
 	now := time.Now()
 
@@ -171,10 +184,13 @@ func buildHeaderEntries(r *http.Request) []headerEntry {
 	headers := make([]headerEntry, 0, len(r.Header)+1)
 	for name, values := range r.Header {
 		lower := strings.ToLower(name)
+		if !strings.HasPrefix(lower, "x-exedev-") {
+			continue
+		}
 		headers = append(headers, headerEntry{
 			Name:       name,
 			Values:     values,
-			AddedByExe: strings.HasPrefix(lower, "x-exedev-") || strings.HasPrefix(lower, "x-forwarded-"),
+			AddedByExe: true,
 		})
 	}
 	if r.Host != "" {

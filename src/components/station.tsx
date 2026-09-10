@@ -410,19 +410,30 @@ export default function Station() {
     if (!activeSession || activeSession.status !== "running") return;
     let stopped = false;
     let timer: ReturnType<typeof setTimeout>;
+    let attempts = 0;
     const poll = async () => {
       try {
         const updated = await api<Session>(
           `/api/station/session/${activeSession.id}`,
         );
         if (stopped) return;
+        attempts = 0;
         setActiveSession(updated);
         setSessions((prev) =>
           prev.map((s) => (s.id === updated.id ? updated : s)),
         );
         if (updated.status === "running") timer = setTimeout(poll, 2500);
       } catch (error) {
-        if (!stopped) setRunError((error as Error).message);
+        if (stopped) return;
+        attempts += 1;
+        if (attempts <= 5) {
+          timer = setTimeout(
+            poll,
+            Math.min(2500 * 2 ** (attempts - 1), 15000),
+          );
+        } else {
+          setRunError((error as Error).message);
+        }
       }
     };
     timer = setTimeout(poll, 500);

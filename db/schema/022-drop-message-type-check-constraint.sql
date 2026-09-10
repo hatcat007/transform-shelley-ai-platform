@@ -3,9 +3,9 @@
 -- does not enumerate them so adding a new UI-only type does not require a
 -- table rebuild migration.
 
-DROP TRIGGER messages_fts_ai;
-DROP TRIGGER messages_fts_ad;
-DROP TRIGGER messages_fts_au;
+DROP TRIGGER IF EXISTS messages_fts_ai;
+DROP TRIGGER IF EXISTS messages_fts_ad;
+DROP TRIGGER IF EXISTS messages_fts_au;
 
 CREATE TABLE messages_new (
     message_id TEXT PRIMARY KEY,

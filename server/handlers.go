@@ -91,16 +91,57 @@ func (s *Server) handleRead(w http.ResponseWriter, r *http.Request) {
 	}
 	// Reasonable short-term caching for assets, allow quick refresh during sessions
 	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; sandbox")
 	io.Copy(w, f)
 }
 
 func isReadableUIFile(path string) bool {
-	return strings.HasPrefix(path, browse.ScreenshotDir+"/") ||
-		strings.HasPrefix(path, browse.UploadDir+"/") ||
-		strings.HasPrefix(path, browse.ConsoleLogsDir+"/") ||
-		strings.HasPrefix(path, browse.ScreencastDir+"/") ||
-		strings.HasPrefix(path, claudetool.OneShotImageDir+"/") ||
-		isDistillationTempFile(path)
+	clean := filepath.Clean(path)
+	resolved := clean
+	if r, err := filepath.EvalSymlinks(clean); err == nil {
+		resolved = r
+	}
+	for _, dir := range []string{browse.ScreenshotDir, browse.UploadDir, browse.ConsoleLogsDir, browse.ScreencastDir, claudetool.OneShotImageDir} {
+		rd := dir
+		if r, err := filepath.EvalSymlinks(dir); err == nil {
+			rd = r
+		}
+		if strings.HasPrefix(resolved, rd+string(os.PathSeparator)) || resolved == rd {
+			return true
+		}
+	}
+	return isDistillationTempFile(resolved)
+}
+
+func pathInGitRepo(clean string) bool {
+	dir := clean
+	if fi, err := os.Stat(clean); err != nil || !fi.IsDir() {
+		dir = filepath.Dir(clean)
+	}
+	for d := dir; ; d = filepath.Dir(d) {
+		if _, err := os.Stat(d); err != nil {
+			break
+		}
+		if root, err := getGitRoot(d); err == nil && root != "" {
+			rroot := root
+			if r, err := filepath.EvalSymlinks(root); err == nil {
+				rroot = r
+			}
+			target := clean
+			if r, err := filepath.EvalSymlinks(clean); err == nil {
+				target = r
+			} else if r, err := filepath.EvalSymlinks(filepath.Dir(clean)); err == nil {
+				target = filepath.Join(r, filepath.Base(clean))
+			}
+			return target == rroot || strings.HasPrefix(target, rroot+string(os.PathSeparator))
+		}
+		parent := filepath.Dir(d)
+		if parent == d {
+			break
+		}
+	}
+	return false
 }
 
 func isDistillationTempFile(path string) bool {
@@ -169,6 +210,10 @@ func (s *Server) handleWriteFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "absolute path required", http.StatusBadRequest)
 		return
 	}
+	if !isUserAgentsMdFile(clean) && !pathInGitRepo(clean) {
+		http.Error(w, "path not allowed", http.StatusForbidden)
+		return
+	}
 
 	// Write the file
 	if err := os.WriteFile(clean, []byte(req.Content), 0o644); err != nil {
@@ -212,6 +257,10 @@ func (s *Server) handleReadFile(w http.ResponseWriter, r *http.Request) {
 	clean := filepath.Clean(p)
 	if !filepath.IsAbs(clean) {
 		http.Error(w, "absolute path required", http.StatusBadRequest)
+		return
+	}
+	if !isUserAgentsMdFile(clean) && !pathInGitRepo(clean) {
+		http.Error(w, "path not allowed", http.StatusForbidden)
 		return
 	}
 	info, err := os.Stat(clean)
