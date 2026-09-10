@@ -95,7 +95,7 @@ func Unpack(templateName, destDir string) error {
 		case tar.TypeSymlink:
 			// Validate symlink target
 			linkTarget := hdr.Linkname
-			if filepath.IsAbs(linkTarget) {
+			if filepath.IsAbs(linkTarget) || strings.Contains(linkTarget, "..") {
 				return fmt.Errorf("absolute symlink not allowed: %s -> %s", hdr.Name, linkTarget)
 			}
 			// Ensure parent directory exists

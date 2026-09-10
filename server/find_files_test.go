@@ -814,6 +814,7 @@ func TestHandleReadFile(t *testing.T) {
 	h := NewTestHarness(t)
 
 	dir := t.TempDir()
+	mustGitInit(t, dir)
 	path := filepath.Join(dir, "hello.txt")
 	writeFile(t, path, "hello world\n")
 
