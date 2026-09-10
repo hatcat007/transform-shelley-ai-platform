@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+const base=process.env.STATION_TEST_URL||'http://localhost:3000';
+const initial=await fetch(`${base}/api/station`);assert.equal(initial.status,200);
+const cookie=initial.headers.get('set-cookie')?.split(';')[0];assert.ok(cookie,'Workspace cookie required');
+const headers={Cookie:cookie,'Content-Type':'application/json'};
+const start=performance.now();
+const reads=await Promise.all(Array.from({length:50},()=>fetch(`${base}/api/station`,{headers})));
+assert.ok(reads.every(r=>r.status===200));await Promise.all(reads.map(r=>r.json()));
+const readDurationMs=Math.round(performance.now()-start);
+const payload={action:'saveAsset',name:'Concurrent save regression',description:'A test-only private workflow.',kind:'agent',category:'Operations',instructions:'Use supplied evidence to create a bounded operations plan. Require human approval before external actions.'};
+const created=await fetch(`${base}/api/station`,{method:'POST',headers,body:JSON.stringify(payload)});assert.equal(created.status,201);const asset=await created.json();
+const changes=await Promise.all(Array.from({length:20},(_,n)=>fetch(`${base}/api/station`,{method:'POST',headers,body:JSON.stringify({...payload,id:asset.id,version:1,instructions:payload.instructions+`\nContender ${n}.`})})));
+const successes=changes.filter(r=>r.status===201).length,conflicts=changes.filter(r=>r.status===409).length;
+assert.equal(successes,1);assert.equal(conflicts,19);
+const versions=await(await fetch(`${base}/api/station?versions=${asset.id}`,{headers})).json();assert.equal(versions.length,2);
+await fetch(`${base}/api/station`,{method:'POST',headers,body:JSON.stringify({action:'deleteAsset',id:asset.id})});
+console.log(JSON.stringify({kind:'API concurrency test; no model calls',parallelReads:50,readDurationMs,competingVersionWrites:20,successes,conflicts,storedVersions:2},null,2));
