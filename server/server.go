@@ -563,18 +563,70 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /debug/loremipsum", http.HandlerFunc(s.handleDebugLoremIpsum))
 	mux.Handle("GET /debug/histograms", http.HandlerFunc(s.handleDebugHistograms))
 
-	// pprof endpoints
-	mux.Handle("GET /debug/pprof/", http.HandlerFunc(pprof.Index))
-	mux.Handle("GET /debug/pprof/cmdline", http.HandlerFunc(pprof.Cmdline))
-	mux.Handle("GET /debug/pprof/profile", http.HandlerFunc(pprof.Profile))
-	mux.Handle("GET /debug/pprof/symbol", http.HandlerFunc(pprof.Symbol))
-	mux.Handle("GET /debug/pprof/trace", http.HandlerFunc(pprof.Trace))
+	// pprof endpoints (gated: proxy header when configured, else loopback only)
+	mux.Handle("GET /debug/pprof/", http.HandlerFunc(s.handlePprofIndex))
+	mux.Handle("GET /debug/pprof/cmdline", http.HandlerFunc(s.handlePprofCmdline))
+	mux.Handle("GET /debug/pprof/profile", http.HandlerFunc(s.handlePprofProfile))
+	mux.Handle("GET /debug/pprof/symbol", http.HandlerFunc(s.handlePprofSymbol))
+	mux.Handle("GET /debug/pprof/trace", http.HandlerFunc(s.handlePprofTrace))
 
 	// Serve embedded UI assets
 	mux.Handle("/", s.staticHandler(ui.Assets()))
 }
 
 // handleValidateCwd validates that a path exists and is a directory
+// handleValidateCwd validates that a path exists and is a directory
+func (s *Server) pprofAllowed(r *http.Request) bool {
+	if s.requireHeader != "" {
+		return r.Header.Get(s.requireHeader) != ""
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	return host == "127.0.0.1" || host == "::1" || host == "localhost"
+}
+
+func (s *Server) handlePprofIndex(w http.ResponseWriter, r *http.Request) {
+	if !s.pprofAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pprof.Index(w, r)
+}
+
+func (s *Server) handlePprofCmdline(w http.ResponseWriter, r *http.Request) {
+	if !s.pprofAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pprof.Cmdline(w, r)
+}
+
+func (s *Server) handlePprofProfile(w http.ResponseWriter, r *http.Request) {
+	if !s.pprofAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pprof.Profile(w, r)
+}
+
+func (s *Server) handlePprofSymbol(w http.ResponseWriter, r *http.Request) {
+	if !s.pprofAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pprof.Symbol(w, r)
+}
+
+func (s *Server) handlePprofTrace(w http.ResponseWriter, r *http.Request) {
+	if !s.pprofAllowed(r) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	pprof.Trace(w, r)
+}
+
 func (s *Server) handleValidateCwd(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -664,6 +716,9 @@ func (s *Server) handleListDirectory(w http.ResponseWriter, r *http.Request) {
 
 	// Clean and resolve the path
 	path = filepath.Clean(path)
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		path = resolved
+	}
 
 	// Verify path exists and is a directory
 	info, err := os.Stat(path)
@@ -889,6 +944,22 @@ func (s *Server) handleCreateDirectory(w http.ResponseWriter, r *http.Request) {
 
 	// Clean the path
 	path := filepath.Clean(req.Path)
+	if path == "/" || path == "." {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": "path not allowed",
+		})
+		return
+	}
+	for _, prefix := range []string{"/proc/", "/sys/", "/dev/"} {
+		if strings.HasPrefix(path, prefix) {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error": "path not allowed",
+			})
+			return
+		}
+	}
 
 	// Check if path already exists
 	if _, err := os.Stat(path); err == nil {

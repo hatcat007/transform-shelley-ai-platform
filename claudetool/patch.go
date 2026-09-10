@@ -81,6 +81,18 @@ func (p *PatchTool) lockPath(path string) func() {
 		if info != nil {
 			pathLock.identity.Store(&patchFileIdentity{info: info})
 		}
+		// ponytail: cap entries, evict oldest unlocked when large
+		if len(p.pathLocks) >= 1024 {
+			kept := p.pathLocks[:0]
+			for _, c := range p.pathLocks {
+				if c.mu.TryLock() {
+					c.mu.Unlock()
+					continue
+				}
+				kept = append(kept, c)
+			}
+			p.pathLocks = kept
+		}
 		p.pathLocks = append(p.pathLocks, pathLock)
 	}
 	p.pathLocksMu.Unlock()

@@ -676,7 +676,7 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	if baseRef == emptyTreeHash {
 		oldContent = ""
 	} else {
-		oldCmd := exec.Command("git", "show", baseRef+":"+filePath)
+		oldCmd := exec.Command("git", "show", baseRef+":"+cleanPath)
 		oldCmd.Dir = gitRoot
 		oldOutput, _ := oldCmd.Output()
 		oldContent = string(oldOutput)
@@ -706,14 +706,16 @@ func (s *Server) handleGitFileDiff(w http.ResponseWriter, r *http.Request) {
 	var newContent string
 	if headRef == "" {
 		fullPath := filepath.Join(gitRoot, cleanPath)
-		if file, err := os.Open(fullPath); err == nil {
+		if resolved, err := filepath.EvalSymlinks(fullPath); err != nil || !strings.HasPrefix(resolved, gitRoot+string(filepath.Separator)) && resolved != gitRoot {
+			newContent = ""
+		} else if file, err := os.Open(resolved); err == nil {
 			defer file.Close()
 			if fileData, err := io.ReadAll(file); err == nil {
 				newContent = string(fileData)
 			}
 		}
 	} else {
-		newCmd := exec.Command("git", "show", headRef+":"+filePath)
+		newCmd := exec.Command("git", "show", headRef+":"+cleanPath)
 		newCmd.Dir = gitRoot
 		newOutput, _ := newCmd.Output()
 		newContent = string(newOutput)

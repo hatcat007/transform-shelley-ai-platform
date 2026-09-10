@@ -136,6 +136,9 @@ func (s *Server) attachOrSpawn(termID, cmd, cwd, conversationID string, cols, ro
 		if sess == nil {
 			return nil, nil, fmt.Errorf("unknown terminal id %s", termID)
 		}
+		if sess.ConversationID != "" && conversationID != sess.ConversationID {
+			return nil, nil, fmt.Errorf("terminal %s belongs to another conversation", termID)
+		}
 		client, err := s.terminals.Attach(sess, cols, rows)
 		if err != nil {
 			// Stale record: the session is gone for good.
