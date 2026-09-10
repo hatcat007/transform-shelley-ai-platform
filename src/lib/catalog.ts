@@ -1,3 +1,4 @@
+import { quickPrompts } from './quick-prompts';
 export type Asset = {
   id: string;
   name: string;
@@ -737,10 +738,10 @@ export const agents: Asset[] = groups.flatMap((group) =>
     instructions: `Role: ${name}, a ${group.category.toLowerCase()} specialist.\nObjective: ${description}\nRequired context: ${inputs}.\nWorkflow: 1. Check the brief and separate verified evidence from assumptions. 2. Analyze the task using the relevant business constraints. 3. Produce: ${deliverable}. 4. Self-check facts, calculations, completeness, and practical next steps.\nQuality and safety: ${safety}`,
   })),
 );
-export const prompts: Asset[] = agents.map((a) => ({
+export const prompts: Asset[] = [...quickPrompts, ...agents.map((a) => ({
   ...a,
   id: `prompt-${a.id}`,
-  kind: "prompt",
+  kind: "prompt" as const,
   name:
     a.name.replace(
       / Strategist| Analyst| Writer| Designer| Planner| Builder| Architect| Coach| Partner| Editor| Manager| Coordinator| Advisor| Reviewer| Producer| Facilitator| Guide| Scout/g,
@@ -753,6 +754,6 @@ export const prompts: Asset[] = agents.map((a) => ({
     .join(
       "\n",
     )}\n\nDELIVERABLE\n${a.deliverable}.\n\nCONSTRAINTS\n${safety}\n\nFinish with the most useful next action and a short list of what still needs verification.`,
-}));
-export const categories = ["All categories", ...groups.map((g) => g.category)];
+}))];
+export const categories = ["All categories", "Repo optimization", ...groups.map((g) => g.category)];
 export const catalog = [...agents, ...prompts];
