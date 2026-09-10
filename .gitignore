@@ -73,3 +73,6 @@ shelley-inline-image-demo.png
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Illustrated station browser artifacts
+/artifacts/

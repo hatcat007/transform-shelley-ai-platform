@@ -68,6 +68,9 @@ import {
   type Asset,
 } from "@/lib/catalog";
 
+import { ArtImage, ArtStage, PageArtwork, tiltArt, resetArt } from "./artwork";
+import { QuickActions } from "./quick-actions";
+
 type Page =
   | "Overview"
   | "Sessions"
@@ -303,6 +306,7 @@ export default function Station() {
   const [modal, setModal] = useState<ModalState>(null);
   const [toast, setToast] = useState("");
   const [dark, setDark] = useState(false);
+  const [motion, setMotion] = useState(true);
   const [mobile, setMobile] = useState(false);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -378,6 +382,9 @@ export default function Station() {
   useEffect(() => {
     void reload();
     void refreshModels();
+    const animations = localStorage.getItem("shelley-motion") !== "off";
+    setMotion(animations);
+    document.documentElement.dataset.motion = animations ? "on" : "off";
     const theme = localStorage.getItem("shelley-theme");
     if (theme === "dark") {
       setDark(true);
@@ -444,7 +451,8 @@ export default function Station() {
   }
   function start(asset?: Asset, text = "") {
     setSelected(asset || null);
-    setBrief(text);
+    if (asset?.category === "Repo optimization") setMode("coding");
+    setBrief(text || (asset?.category === "Repo optimization" ? "Repository: \nTarget branch: \nScope: Review the repository and propose focused improvements.\nConstraints: Preserve existing behavior and uncommitted work." : ""));
     setRunError("");
     setActiveSession(null);
     setComposer(true);
@@ -537,8 +545,10 @@ export default function Station() {
   function Card({ asset }: { asset: Asset }) {
     return (
       <article
-        className={`agent-card ${asset.category.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+        className={`agent-card illustrated-card ${asset.category.toLowerCase().replace(/[^a-z]+/g, "-")}`}
+        onPointerMove={tiltArt} onPointerLeave={resetArt}
       >
+        <button className="card-art-button" aria-label={`Preview ${asset.name}`} onClick={() => setModal({ type: "asset", asset })}><ArtImage asset={asset} /><span className="art-type"><Sparkles size={11} /> {asset.kind === "agent" ? "YOUR AI SPECIALIST" : "A BETTER STARTING POINT"}</span><span className="art-preview"><ArrowUpRight size={16} /></span></button>
         <div className="agent-card-top">
           <span className="asset-icon">
             <CategoryIcon category={asset.category} />
@@ -838,6 +848,7 @@ export default function Station() {
               Personal workspace
             </span>
             <span className="topbar-divider" />
+            <button className="motion-button" aria-label={motion ? "Pause animations" : "Enable animations"} aria-pressed={motion} title={motion ? "Pause animations" : "Enable animations"} onClick={() => { const next = !motion; setMotion(next); document.documentElement.dataset.motion = next ? "on" : "off"; localStorage.setItem("shelley-motion", next ? "on" : "off"); }}><span className={motion ? "motion-indicator on" : "motion-indicator"} /><span>Motion {motion ? "on" : "off"}</span></button>
             <button
               className="icon-button"
               aria-label="What’s new"
@@ -950,29 +961,12 @@ export default function Station() {
                     </button>
                   </div>
                 </div>
-                <div className="hero-art" aria-hidden="true">
-                  <div className="art-grid" />
-                  <div className="orbit orbit-one" />
-                  <div className="orbit orbit-two" />
-                  <div className="orbit orbit-three" />
-                  <div className="orbit-core">
-                    <Mark />
-                  </div>
-                  <div className="floating-tile tile-chart">
-                    <BarChart3 size={25} strokeWidth={1.5} />
-                  </div>
-                  <div className="floating-tile tile-spark">
-                    <Sparkles size={24} strokeWidth={1.5} />
-                  </div>
-                  <div className="floating-tile tile-message">
-                    <MessageSquare size={24} strokeWidth={1.5} />
-                  </div>
-                  <div className="orbit-point point-one" />
-                  <div className="orbit-point point-two" />
-                  <span className="art-caption">
-                    YOUR POTENTIAL, MULTIPLIED.
-                  </span>
-                </div>
+                <ArtStage className="hero-scene">
+                  <img className="hero-scene-image" src="/images/art/growth-studio.webp" alt="Sage-green clover sculpture and a growing plant on ivory platforms" width={1100} height={733} fetchPriority="high" />
+                  <span className="scene-tag tag-one"><Sparkles size={13} /> A little AI. A lot of possibility.</span>
+                  <span className="scene-tag tag-two"><span className="tiny-dot" /> Built around you</span>
+                  <span className="scene-cross cross-one">+</span><span className="scene-cross cross-two">+</span>
+                </ArtStage>
               </section>
               <section className="stats-grid" aria-label="Workspace statistics">
                 <div className="stat">
@@ -1037,6 +1031,7 @@ export default function Station() {
                   </div>
                 </div>
               </section>
+              <QuickActions onSelect={(asset) => setModal({ type: "asset", asset })} onViewAll={() => { navigate("Prompt library"); setCategory("Repo optimization"); }} />
               <section className="featured-section">
                 <div className="section-heading">
                   <div>
@@ -1132,21 +1127,8 @@ export default function Station() {
                   Create {page === "Prompt library" ? "prompt" : "agent"}
                 </button>
               </div>
-              {page === "Agent & Prompt Station" && (
-                <div className="station-banner">
-                  <span className="banner-icon">
-                    <WandSparkles size={24} />
-                  </span>
-                  <div>
-                    <h3>Small team energy. Entire team capability.</h3>
-                    <p>
-                      108 specialists. 108 starting points. One space to make
-                      them yours.
-                    </p>
-                  </div>
-                  <span className="pill">BUILT FOR BUSINESS</span>
-                </div>
-              )}
+              <PageArtwork page={page} />
+              {page === "Prompt library" && !query && category === "All categories" && <QuickActions full onSelect={(asset) => setModal({ type: "asset", asset })} onViewAll={() => setCategory("Repo optimization")} />}
               <div className="library-toolbar">
                 <div className="tabs" role="tablist" aria-label="Library type">
                   {(page === "My agents"
@@ -1237,7 +1219,7 @@ export default function Station() {
               </div>
               {!filtered.length && (
                 <div className="empty-state">
-                  <Bot size={32} />
+                  <img className="empty-art" src="/images/art/workspace-0.webp" alt="Your future team of AI specialists" width={220} height={165} />
                   <h2>
                     {tab === "saved"
                       ? "Make this space your own."
@@ -1300,6 +1282,7 @@ export default function Station() {
                       <ArrowRight size={15} />
                     </button>
                   </div>
+                  <PageArtwork page={page} />
                   <div className="composer-layout">
                     <form className="composer-panel panel" onSubmit={run}>
                       <div className="composer-agent">
@@ -1673,7 +1656,8 @@ export default function Station() {
                     </select>
                   </div>
                   <div className="panel">
-                    <SessionRows />
+                    <PageArtwork page="Sessions" />
+                      <SessionRows />
                   </div>
                   {!sessions.length && (
                     <section className="starter-section">
@@ -1720,6 +1704,7 @@ export default function Station() {
                   New project
                 </button>
               </div>
+              <PageArtwork page={page} />
               {projects.length ? (
                 <div className="project-grid">
                   {projects.map((project) => (
@@ -1752,7 +1737,7 @@ export default function Station() {
                 </div>
               ) : (
                 <div className="empty-state panel">
-                  <Folder size={38} />
+                  <img className="empty-art" src="/images/art/workspace-1.webp" alt="Stacked folders with a growing plant" width={220} height={165} />
                   <h2>Big ideas deserve a little space.</h2>
                   <p>
                     Create a project, give it a goal, and take it one thoughtful
@@ -1814,6 +1799,7 @@ export default function Station() {
                   Export usage
                 </button>
               </div>
+              <PageArtwork page={page} />
               <div className="analytics-stats">
                 {[
                   ["Total sessions", sessions.length],
@@ -1895,6 +1881,7 @@ export default function Station() {
                   <p>The little settings that make Shelley feel like yours.</p>
                 </div>
               </div>
+              <PageArtwork page={page} />
               <div className="settings-layout">
                 <section className="settings-card panel">
                   <div className="settings-heading">
@@ -2387,6 +2374,7 @@ function AssetModal({
   onShare: () => void;
 }) {
   const [tab, setTab] = useState("Overview");
+  const [copied, setCopied] = useState(false);
   const [versions, setVersions] = useState<
     { version: number; instructions: string; createdAt: string }[]
   >([]);
@@ -2421,6 +2409,7 @@ function AssetModal({
         ))}
       </div>
       <div className="modal-body asset-detail">
+        <ArtStage className="detail-art"><ArtImage asset={asset} /><span><Sparkles size={15} /> {asset.category === "Repo optimization" ? "A QUICK WIN FOR YOUR CODEBASE" : "YOUR NEXT POSSIBILITY"}</span></ArtStage>
         {error && tab !== "Versions" && <p role="status">{error}</p>}
         {tab === "Overview" ? (
           <>
@@ -2498,6 +2487,7 @@ function AssetModal({
             Disable sharing
           </button>
         )}
+        <button className="secondary-button" onClick={async () => { try { await navigator.clipboard.writeText(asset.instructions); setCopied(true); } catch { setError("Clipboard unavailable. Open Instructions to select and copy the prompt."); } }}><Copy size={14} />{copied ? "Copied!" : "Copy prompt"}</button>
         <button className="secondary-button" onClick={onEdit}>
           {saved ? "Edit workflow" : "Customize & save"}
           <SlidersHorizontal size={15} />
